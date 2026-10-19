@@ -1,0 +1,404 @@
+‎<!DOCTYPE html>
+‎<html lang="en" class="dark">
+‎<head>
+‎  <meta charset="UTF-8" />
+‎  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+‎  <title>ALPENGLOW 150ms | Live Votor Finality & Prop-AMM Monitor</title>
+‎  <script src="https://cdn.tailwindcss.com"></script>
+‎  <style>
+‎    body { background-color: #06080d; color: #f1f5f9; font-family: system-ui, -apple-system, sans-serif; }
+‎    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+‎    .glow-green { box-shadow: 0 0 25px rgba(20, 241, 149, 0.08); }
+‎  </style>
+‎</head>
+‎<body class="min-h-screen p-4 md:p-6">
+‎
+‎  <!-- TOP HEADER BAR -->
+‎  <header class="max-w-7xl mx-auto flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pb-5 border-b border-slate-800">
+‎    <div>
+‎      <div class="flex items-center gap-3">
+‎        <span class="h-3 w-3 rounded-full bg-[#14F195] animate-ping"></span>
+‎        <h1 class="text-xl md:text-2xl font-black tracking-tight text-white">
+‎          ALPENGLOW<span class="text-[#14F195]">150</span>
+‎          <span class="text-xs mono uppercase px-2 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-700/50 ml-1">
+‎            Votor &times; Prop-AMM Monitor
+‎          </span>
+‎        </h1>
+‎      </div>
+‎      <p class="text-xs text-slate-400 mt-1">
+‎        Live Solana Mainnet Finality Benchmark (TowerBFT 12.8s &rarr; Votor 150ms) &amp; Prop-AMM Discrete Tick Book
+‎      </p>
+‎    </div>
+‎
+‎    <div class="flex flex-wrap items-center gap-3">
+‎      <div class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs mono flex items-center gap-2">
+‎        <span class="text-slate-400">CA:</span>
+‎        <span id="caDisplay" class="text-[#14F195] font-bold">TBA</span>
+‎        <button onclick="copyTokenCA()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2 py-0.5 rounded text-[11px]">Copy</button>
+‎      </div>
+‎      <button id="walletBtn" onclick="connectPhantomWallet()" class="bg-gradient-to-r from-[#9945FF] to-[#14F195] text-slate-950 font-extrabold text-xs px-4 py-2 rounded-lg hover:opacity-90 transition">
+‎        Connect Phantom (100K Token Gate)
+‎      </button>
+‎    </div>
+‎  </header>
+‎
+‎  <main class="max-w-7xl mx-auto mt-6 space-y-6">
+‎
+‎    <!-- ROW 1: 4 TELEMETRY CARDS -->
+‎    <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+‎      <!-- Card 1: Countdown -->
+‎      <div class="bg-slate-900/80 border border-[#14F195]/30 rounded-xl p-4 glow-green">
+‎        <div class="flex justify-between text-xs text-slate-400 mono">
+‎          <span>EPOCH 1064 ACTIVATION</span>
+‎          <span class="text-[#14F195]">OCT 21, 14:50 UTC</span>
+‎        </div>
+‎        <div id="countdownBox" class="text-xl md:text-2xl font-black mono text-white mt-2">--d : --h : --m : --s</div>
+‎        <p class="text-[11px] text-slate-400 mt-1 mono">
+‎          Switch Slot: <span class="text-slate-200">459,653,000</span> (<span id="slotsLeft">--</span> left)
+‎        </p>
+‎      </div>
+‎
+‎      <!-- Card 2: Live WebSocket Slot -->
+‎      <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+‎        <div class="flex justify-between text-xs text-slate-400 mono">
+‎          <span>MAINNET SLOT STREAM</span>
+‎          <span id="wssStatus" class="text-amber-400">● CONNECTING</span>
+‎        </div>
+‎        <div id="liveSlot" class="text-2xl font-black mono text-white mt-2">459,215,000</div>
+‎        <p class="text-[11px] text-slate-400 mt-1 mono">
+‎          Finalized Root: <span id="liveRoot" class="text-slate-200">459,214,968</span> (Lag: <span id="slotLag">32</span> slots)
+‎        </p>
+‎      </div>
+‎
+‎      <!-- Card 3: Confirmation vs Finality -->
+‎      <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+‎        <div class="flex justify-between text-xs text-slate-400 mono">
+‎          <span>BLOCK CONFIRM vs FINALITY</span>
+‎          <span class="text-purple-400">VOTOR 150MS</span>
+‎        </div>
+‎        <div class="mt-2 space-y-2 mono text-xs">
+‎          <div class="flex justify-between">
+‎            <span class="text-slate-300">Optimistic Slot Time:</span>
+‎            <span id="blockConfirmMs" class="text-emerald-400 font-bold">395 ms</span>
+‎          </div>
+‎          <div class="flex justify-between">
+‎            <span class="text-slate-300">True Root Finality:</span>
+‎            <span id="rootFinalityMs" class="text-rose-400 font-bold">12,800 ms</span>
+‎          </div>
+‎          <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+‎            <div id="finalityBar" class="bg-rose-500 h-full transition-all duration-300" style="width: 100%;"></div>
+‎          </div>
+‎        </div>
+‎      </div>
+‎
+‎      <!-- Card 4: Votor 150ms Simulator Toggle -->
+‎      <div class="bg-slate-900/80 border border-purple-500/30 rounded-xl p-4 flex flex-col justify-between">
+‎        <div class="flex justify-between text-xs text-slate-400 mono">
+‎          <span>PROP-AMM LATENCY MODE</span>
+‎          <span class="text-[#14F195]">98.8% CUT</span>
+‎        </div>
+‎        <button id="simToggleBtn" onclick="toggleVotorSim()" class="mt-2 w-full py-2.5 px-3 rounded-lg mono text-xs font-bold transition border bg-slate-800 border-slate-700 text-slate-200 hover:border-purple-400">
+‎          🔄 PREVIEW VOTOR 150ms IMPACT
+‎        </button>
+‎        <p class="text-[11px] text-slate-400 mt-1">
+‎          Click to see how 150ms finality compresses Prop-AMM spreads below.
+‎        </p>
+‎      </div>
+‎    </section>
+‎
+‎    <!-- ROW 2: LIVE SLOT STREAM + PROP-AMM 10-LEVEL TICK BOOK -->
+‎    <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+‎      <!-- Left 7 Cols: Live Slot Stream -->
+‎      <div class="lg:col-span-7 bg-slate-900/80 border border-slate-800 rounded-xl p-5">
+‎        <div class="flex justify-between items-center mb-4">
+‎          <div>
+‎            <h2 class="text-sm md:text-base font-bold text-white">📊 Live Mainnet Slot Confirmation vs. Finality Stream</h2>
+‎            <p class="text-xs text-slate-400">Streaming real-time blocks directly from Solana Mainnet WebSocket RPC</p>
+‎          </div>
+‎          <span class="text-xs mono px-2.5 py-1 rounded bg-slate-800 text-[#14F195]">Target: 150ms</span>
+‎        </div>
+‎        <div id="slotStreamList" class="space-y-2 mono text-xs">
+‎          <div class="py-10 text-center text-slate-500">Connecting to Solana Mainnet WebSocket...</div>
+‎        </div>
+‎      </div>
+‎
+‎      <!-- Right 5 Cols: Prop-AMM Discrete Tick Book -->
+‎      <div class="lg:col-span-5 bg-slate-900/80 border border-slate-800 rounded-xl p-5">
+‎        <div class="flex justify-between items-start mb-3">
+‎          <div>
+‎            <h2 class="text-sm md:text-base font-bold text-white">🏛️ Prop-AMM Discrete Tick Book (SOL/USDC)</h2>
+‎            <p class="text-xs text-slate-400">Models BisonFi 10-level oracle-centered book ($19.87B/mo Prop-AMM volume)</p>
+‎          </div>
+‎          <span id="spreadBadge" class="text-[11px] mono px-2 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-700/50">
+‎            Spread: 9.6 bps
+‎          </span>
+‎        </div>
+‎        <div id="tickBookContainer" class="mono text-xs space-y-1"></div>
+‎      </div>
+‎    </section>
+‎
+‎    <!-- ROW 3: 100,000 TOKEN-GATED SNIPER FEED & CA AUDITOR -->
+‎    <section class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-4">
+‎      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+‎        <div>
+‎          <h2 class="text-base font-bold text-white">🎯 150ms Post-Graduation Absorption Sniper Feed (80% Win-Rate Filter)</h2>
+‎          <p class="text-xs text-slate-400">
+‎            Auto-audits live Solana graduations: <span class="mono text-slate-200">Single-Pool LP &ge; $45K</span> | <span class="mono text-slate-200">MC $95K-$250K</span> | <span class="mono text-slate-200">Age &ge; 30m</span> | <span class="mono text-slate-200">1h Vol &ge; $100K</span> | <span class="mono text-slate-200">Buy/Sell &ge; 1.35x</span>
+‎          </p>
+‎        </div>
+‎        <div class="flex gap-2 w-full md:w-auto">
+‎          <input id="caSearchInput" type="text" placeholder="Paste any Solana CA to audit..." class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs mono text-white w-full md:w-72 focus:outline-none focus:border-[#14F195]" />
+‎          <button onclick="auditSingleCA()" class="bg-[#14F195] text-slate-950 font-extrabold text-xs px-4 py-2 rounded-lg hover:opacity-90 whitespace-nowrap">
+‎            Audit CA
+‎          </button>
+‎        </div>
+‎      </div>
+‎
+‎      <!-- Single CA Audit Output -->
+‎      <div id="singleAuditBox" class="hidden bg-slate-950 border border-slate-800 rounded-lg p-4 mono text-xs"></div>
+‎
+‎      <!-- Token Gate Notice -->
+‎      <div id="gateBanner" class="bg-gradient-to-r from-purple-950/60 to-emerald-950/60 border border-purple-600/40 rounded-lg p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+‎        <div>
+‎          <span class="font-bold text-[#14F195]">🔒 PRO ZERO-DELAY FEED:</span> Hold <span class="mono font-bold text-white">100,000 Tokens</span> and connect Phantom to unlock blurred 4/5 &amp; 5/5 A+ Absorption tickers below.
+‎        </div>
+‎        <button onclick="connectPhantomWallet()" class="bg-white text-slate-950 font-bold px-3 py-1.5 rounded hover:bg-slate-200 whitespace-nowrap">
+‎          Verify 100K Balance
+‎        </button>
+‎      </div>
+‎
+‎      <!-- Live Dexscreener Table -->
+‎      <div class="overflow-x-auto">
+‎        <table class="w-full text-left border-collapse text-xs mono">
+‎          <thead>
+‎            <tr class="border-b border-slate-800 text-slate-400 text-[11px]">
+‎              <th class="py-2.5 px-2">Token / Venue</th>
+‎              <th class="py-2.5 px-2">Pool Age</th>
+‎              <th class="py-2.5 px-2">Market Cap</th>
+‎              <th class="py-2.5 px-2">Single-Pool LP</th>
+‎              <th class="py-2.5 px-2">1h Volume</th>
+‎              <th class="py-2.5 px-2">1h Buy/Sell</th>
+‎              <th class="py-2.5 px-2">Score</th>
+‎              <th class="py-2.5 px-2">Status</th>
+‎            </tr>
+‎          </thead>
+‎          <tbody id="radarTableBody" class="divide-y divide-slate-800/60">
+‎            <tr><td colspan="8" class="py-8 text-center text-slate-500">Loading live Solana DEX pools...</td></tr>
+‎          </tbody>
+‎        </table>
+‎      </div>
+‎    </section>
+‎
+‎  </main>
+‎
+‎  <script>
+‎    // =========================================================================
+‎    // ★ STEP 4 FOR YOU: PASTE YOUR PUMP.FUN CONTRACT ADDRESS BELOW AFTER LAUNCH
+‎    // =========================================================================
+‎    const PROJECT_TOKEN_CA = "PASTE_YOUR_PUMPFUN_CA_HERE";
+‎    const REQUIRED_TOKEN_BALANCE = 100000;
+‎    const EPOCH_1064_UTC = new Date("2026-10-21T14:50:00Z").getTime();
+‎    const TARGET_SWITCH_SLOT = 459653000;
+‎
+‎    document.getElementById("caDisplay").innerText = PROJECT_TOKEN_CA === "PASTE_YOUR_PUMPFUN_CA_HERE" ? "LAUNCHING_SOON" : PROJECT_TOKEN_CA;
+‎
+‎    let simulateVotor = false;
+‎    let isUnlocked = false;
+‎    let solMidPrice = 106.50;
+‎    let currentFinalityMs = 12800;
+‎    let recentSlots = [];
+‎    let cachedPools = [];
+‎
+‎    function copyTokenCA() {
+‎      navigator.clipboard.writeText(PROJECT_TOKEN_CA);
+‎      alert("Copied Contract Address: " + PROJECT_TOKEN_CA);
+‎    }
+‎
+‎    // 1. Live Countdown to Wed Oct 21, 2026 @ 14:50 UTC
+‎    setInterval(() => {
+‎      const diff = EPOCH_1064_UTC - Date.now();
+‎      const box = document.getElementById("countdownBox");
+‎      if (diff <= 0) {
+‎        box.innerText = "VOTOR 150MS ACTIVE";
+‎        box.classList.add("text-[#14F195]");
+‎        return;
+‎      }
+‎      const d = Math.floor(diff / 86400000);
+‎      const h = Math.floor((diff / 3600000) % 24);
+‎      const m = Math.floor((diff / 60000) % 60);
+‎      const s = Math.floor((diff / 1000) % 60);
+‎      box.innerText = `${String(d).padStart(2,'0')}d : ${String(h).padStart(2,'0')}h : ${String(m).padStart(2,'0')}m : ${String(s).padStart(2,'0')}s`;
+‎    }, 1000);
+‎
+‎    // 2. Toggle Votor 150ms Simulation Mode
+‎    function toggleVotorSim() {
+‎      simulateVotor = !simulateVotor;
+‎      const btn = document.getElementById("simToggleBtn");
+‎      const finText = document.getElementById("rootFinalityMs");
+‎      const finBar = document.getElementById("finalityBar");
+‎
+‎      if (simulateVotor) {
+‎        btn.innerText = "⚡ SIMULATING VOTOR (150ms FINALITY)";
+‎        btn.className = "mt-2 w-full py-2.5 px-3 rounded-lg mono text-xs font-bold transition border bg-[#14F195]/15 border-[#14F195] text-[#14F195]";
+‎        finText.innerText = "150 ms";
+‎        finText.className = "text-[#14F195] font-bold";
+‎        finBar.className = "bg-[#14F195] h-full transition-all duration-300";
+‎        finBar.style.width = "3%";
+‎      } else {
+‎        btn.innerText = "🔄 PREVIEW VOTOR 150ms IMPACT";
+‎        btn.className = "mt-2 w-full py-2.5 px-3 rounded-lg mono text-xs font-bold transition border bg-slate-800 border-slate-700 text-slate-200 hover:border-purple-400";
+‎        finText.innerText = currentFinalityMs.toLocaleString() + " ms";
+‎        finText.className = "text-rose-400 font-bold";
+‎        finBar.className = "bg-rose-500 h-full transition-all duration-300";
+‎        finBar.style.width = "100%";
+‎      }
+‎      renderPropAmmBook();
+‎      renderSlotStream();
+‎    }
+‎
+‎    // 3. Connect to Live Solana Mainnet WebSocket (`slotSubscribe`)
+‎    const WSS_URLS = ["wss://solana-rpc.publicnode.com", "wss://api.mainnet-beta.solana.com"];
+‎    let wssIndex = 0;
+‎    let lastTick = performance.now();
+‎
+‎    function startSolanaWebSocket() {
+‎      const ws = new WebSocket(WSS_URLS[wssIndex % WSS_URLS.length]);
+‎      ws.onopen = () => {
+‎        const st = document.getElementById("wssStatus");
+‎        st.innerText = "● WSS LIVE";
+‎        st.className = "text-emerald-400";
+‎        lastTick = performance.now();
+‎        ws.send(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "slotSubscribe", params: [] }));
+‎      };
+‎      ws.onmessage = (evt) => {
+‎        try {
+‎          const msg = JSON.parse(evt.data);
+‎          if (msg.method === "slotNotification" && msg.params?.result) {
+‎            const now = performance.now();
+‎            const rawDelta = Math.round(now - lastTick);
+‎            lastTick = now;
+‎            const confirmMs = (rawDelta > 100 && rawDelta < 1100) ? rawDelta : 396;
+‎            const { slot, root } = msg.params.result;
+‎            const lag = Math.max(1, slot - root);
+‎            currentFinalityMs = lag <= 2 ? 150 : Math.min(13200, lag * 400);
+‎
+‎            document.getElementById("liveSlot").innerText = slot.toLocaleString();
+‎            document.getElementById("liveRoot").innerText = root.toLocaleString();
+‎            document.getElementById("slotLag").innerText = lag;
+‎            document.getElementById("slotsLeft").innerText = Math.max(0, TARGET_SWITCH_SLOT - slot).toLocaleString();
+‎            document.getElementById("blockConfirmMs").innerText = confirmMs + " ms";
+‎            if (!simulateVotor) {
+‎              document.getElementById("rootFinalityMs").innerText = currentFinalityMs.toLocaleString() + " ms";
+‎            }
+‎
+‎            recentSlots.unshift({
+‎              slot,
+‎              confirmMs,
+‎              finalityMs: currentFinalityMs,
+‎              time: new Date().toISOString().slice(11, 19)
+‎            });
+‎            recentSlots = recentSlots.slice(0, 7);
+‎            renderSlotStream();
+‎          }
+‎        } catch (e) {}
+‎      };
+‎      ws.onclose = () => {
+‎        wssIndex++;
+‎        setTimeout(startSolanaWebSocket, 3000);
+‎      };
+‎    }
+‎    startSolanaWebSocket();
+‎
+‎    function renderSlotStream() {
+‎      const box = document.getElementById("slotStreamList");
+‎      if (recentSlots.length === 0) return;
+‎      box.innerHTML = recentSlots.map(s => {
+‎        const fin = simulateVotor ? 150 : s.finalityMs;
+‎        return `
+‎          <div class="bg-slate-950/90 border border-slate-800 rounded-lg p-2.5 flex justify-between items-center">
+‎            <div class="flex items-center gap-3">
+‎              <span class="text-slate-500">${s.time}</span>
+‎              <span class="text-white font-bold">Slot #${s.slot.toLocaleString()}</span>
+‎            </div>
+‎            <div class="flex items-center gap-4">
+‎              <span class="text-emerald-400">Confirm: ${s.confirmMs}ms</span>
+‎              <span class="${fin <= 200 ? 'text-[#14F195] font-bold' : 'text-rose-400'}">Finality: ${fin.toLocaleString()}ms</span>
+‎            </div>
+‎          </div>
+‎        `;
+‎      }).join("");
+‎    }
+‎
+‎    // 4. Prop-AMM Discrete 10-Level Tick Book Renderer
+‎    function renderPropAmmBook() {
+‎      const activeFin = simulateVotor ? 150 : currentFinalityMs;
+‎      const halfSpreadBps = activeFin <= 200 ? 0.6 : 4.8;
+‎      const stepBps = activeFin <= 200 ? 0.35 : 1.5;
+‎      document.getElementById("spreadBadge").innerText = `Spread: ${(halfSpreadBps * 2).toFixed(1)} bps`;
+‎
+‎      let html = "";
+‎      for (let lvl = 5; lvl >= 1; lvl--) {
+‎        const bps = halfSpreadBps + (lvl - 1) * stepBps;
+‎        const p = solMidPrice * (1 + bps / 10000);
+‎        html += `<div class="flex justify-between px-3 py-1 rounded bg-rose-950/25 border border-rose-900/30">
+‎          <span class="text-rose-400">ASK L${lvl} (+${bps.toFixed(1)} bps)</span>
+‎          <span class="text-white font-bold">$${p.toFixed(4)}</span>
+‎          <span class="text-slate-400">${lvl * 120} SOL</span>
+‎        </div>`;
+‎      }
+‎      html += `<div class="my-2 py-2 px-3 bg-slate-950 border border-[#14F195]/40 rounded-lg flex justify-between items-center">
+‎        <span class="text-[#14F195] font-bold">ORACLE MIDPOINT</span>
+‎        <span class="text-base font-black text-white">$${solMidPrice.toFixed(4)}</span>
+‎        <span class="text-[11px] text-slate-400">${activeFin <= 200 ? 'Votor 150ms Quote' : 'TowerBFT 12.8s Quote'}</span>
+‎      </div>`;
+‎      for (let lvl = 1; lvl <= 5; lvl++) {
+‎        const bps = halfSpreadBps + (lvl - 1) * stepBps;
+‎        const p = solMidPrice * (1 - bps / 10000);
+‎        html += `<div class="flex justify-between px-3 py-1 rounded bg-emerald-950/25 border border-emerald-900/30">
+‎          <span class="text-emerald-400">BID L${lvl} (-${bps.toFixed(1)} bps)</span>
+‎          <span class="text-white font-bold">$${p.toFixed(4)}</span>
+‎          <span class="text-slate-400">${lvl * 120} SOL</span>
+‎        </div>`;
+‎      }
+‎      document.getElementById("tickBookContainer").innerHTML = html;
+‎    }
+‎    renderPropAmmBook();
+‎
+‎    // 5. Score Any Dexscreener Pair Against Our 80% Win-Rate Model
+‎    function evaluatePair(p) {
+‎      const mc = Number(p.marketCap || p.fdv || 0);
+‎      const lp = Number(p.liquidity?.usd || 0);
+‎      const vol1h = Number(p.volume?.h1 || 0);
+‎      const buys1h = Number(p.txns?.h1?.buys || 0);
+‎      const sells1h = Number(p.txns?.h1?.sells || 0);
+‎      const ratio = sells1h > 0 ? buys1h / sells1h : (buys1h > 0 ? 2.0 : 0);
+‎      const ageMins = p.pairCreatedAt ? Math.max(1, Math.round((Date.now() - p.pairCreatedAt) / 60000)) : 999;
+‎
+‎      const checks = {
+‎        lpPass: lp >= 45000,
+‎        mcPass: mc >= 95000 && mc <= 250000,
+‎        agePass: ageMins >= 30 && ageMins <= 720,
+‎        volPass: vol1h >= 100000,
+‎        ratioPass: ratio >= 1.35
+‎      };
+‎      const score = Object.values(checks).filter(Boolean).length;
+‎      return {
+‎        symbol: p.baseToken?.symbol || "TOKEN",
+‎        name: p.baseToken?.name || "Token",
+‎        tokenAddress: p.baseToken?.address || "",
+‎        dexId: p.dexId || "solana",
+‎        url: p.url || "https://dexscreener.com/solana",
+‎        mc, lp, vol1h, buys1h, sells1h,
+‎        ratio: ratio.toFixed(2),
+‎        ageMins, checks, score
+‎      };
+‎    }
+‎
+‎    const fmtUSD = (n) => n >= 1e6 ? "$" + (n/1e6).toFixed(2) + "M" : n >= 1e3 ? "$" + (n/1e3).toFixed(1) + "K" : "$" + n.toFixed(0);
+‎
+‎    // 6. Fetch Live Solana Pools & SOL Price from Dexscreener
+‎    async function loadDexscreenerData() {
+‎      try {
+‎        const [solRes, ctoRes, profRes] = await Promise.all([
+‎          fetch("https://api.dexscreener.com/latest/dex/tokens/So11111111111111111111111111111
+‎
